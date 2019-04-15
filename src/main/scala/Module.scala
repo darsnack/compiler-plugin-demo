@@ -1,4 +1,4 @@
-object App {
+object Module {
   class A {
     def +(that: A): A = ???
     def -(that: A): A = ???
@@ -17,8 +17,11 @@ object App {
     }
   }
 
-  val y: A = ???
-  val z: A = ???
-  val a: Double = ???
-  val x: A = y + a * z
+  def loop() = {
+    val y: A = ???
+    val z: A = ???
+    val a: Double = ???
+    val x: A = y + a * z
+  }
+
 }
