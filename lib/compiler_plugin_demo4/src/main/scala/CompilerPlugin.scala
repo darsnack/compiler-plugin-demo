@@ -18,6 +18,7 @@ class CompilerPluginComponent(val global: Global)
   import global._
   override val phaseName = "compiler-plugin-phase"
   override val runsAfter = List("parser")
+  override val runsBefore = List("namer")
   override def newPhase(prev: Phase) =
     new StdPhase(prev) {
       override def apply(unit: CompilationUnit) {
@@ -29,9 +30,11 @@ class CompilerPluginComponent(val global: Global)
     extends TypingTransformer(unit) {
     override def transform(tree: Tree) = tree match {
       case ClassDef(classmods, classname, classtparams, impl) if classname.toString == "Module" => {
+        // println("Here")
         var implStatements: List[Tree] = List()
         for (node <- impl.body) node match {
           case DefDef(mods, name, tparams, vparamss, tpt, body) if name.toString == "loop" => {
+            // println("Here Here")
             var statements: List[Tree] = List()
             for (statement <- body.children.dropRight(1)) statement match {
               case Assign(opd, rhs) => {
@@ -39,6 +42,7 @@ class CompilerPluginComponent(val global: Global)
                 statements = statements ++ List(Assign(opd, optimizedRHS))
               }
               case ValDef(mods, opd, tpt, rhs) => {
+                // println("Here Here Here")
                 val optimizedRHS = optimizeStatement(rhs)
                 statements = statements ++
                   List(ValDef(mods, opd, tpt, optimizedRHS))
@@ -64,7 +68,37 @@ class CompilerPluginComponent(val global: Global)
     }
   }
 
-  def optimizeStatement(tree: Tree): Tree = tree
+  def optimizeStatement(statement: Tree): Tree = {
+    if (statement.children.length == 0) statement
+    else statement match {
+      case Apply(Apply(Select(src1, TermName(op)), List(src2)), List(src3)) => {
+        var optimizedSrc1 = optimizeStatement(src1)
+        var optimizedSrc2 = optimizeStatement(src2)
+        var newOp = TermName(op)
+
+        var optimizedNode = q"$optimizedSrc1.$newOp($optimizedSrc2)($src3)"
+        optimizeStatementHelper(optimizedNode)
+      }
+      case Apply(Select(src1, TermName(op)), List(src2)) => {
+        var optimizedSrc1 = optimizeStatement(src1)
+        var optimizedSrc2 = optimizeStatement(src2)
+        var newOp = TermName(op)
+
+        var optimizedNode = q"$optimizedSrc1.$newOp($optimizedSrc2)"
+        optimizeStatementHelper(optimizedNode)
+      }
+      case Select(src1, TermName(op)) => {
+        var optimizedSrc1 = optimizeStatement(src1)
+        var newOp = TermName(op)
+
+        var optimizedNode = q"$optimizedSrc1.$newOp"
+        optimizeStatementHelper(optimizedNode)
+      }
+      case _ => statement
+    }
+  }
+
+  def optimizeStatementHelper(tree: Tree): Tree = tree
 
   def newTransformer(unit: CompilationUnit) =
     new MyTypingTransformer(unit)
